@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Evaluador de Casting – Che Burlesque Producciones</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f0f0f">
+
+<!-- SheetJS -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background: #0f0f0f;
+  color: #fff;
+  padding: 20px;
+}
+h1 { margin-bottom: 4px; }
+small { opacity: .6; }
+input, textarea, button { font-family: inherit; }
+button {
+  padding: 6px 10px;
+  margin: 3px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.btn-yes { background:#27ae60; }
+.btn-obs { background:#f1c40f; color:#000; }
+.btn-no  { background:#c0392b; }
+.btn-export { background:#2980b9; margin-top:8px; }
+
+.card {
+  background:#1b1b1b;
+  padding:15px;
+  border-radius:8px;
+  margin-bottom:15px;
+}
+.card.pending { border-left:6px solid #7f8c8d; }
+.card.yes { border-left:6px solid #27ae60; }
+.card.obs { border-left:6px solid #f1c40f; }
+.card.no  { border-left:6px solid #c0392b; }
+
+.links a {
+  color:#1abc9c;
+  display:block;
+  word-break:break-all;
+  font-size:.9em;
+}
+
+textarea {
+  width:100%;
+  margin-top:8px;
+  padding:8px;
+  border-radius:4px;
+  border:none;
+  resize:vertical;
+}
+hr { opacity:.2; }
+</style>
+</head>
+
+<body>
+
+<h1>🎭 Evaluador de Casting</h1>
+<small>Che Burlesque Producciones</small><br>
+
+<input type="file" id="fileInput" accept=".csv,.xlsx"><br>
+
+<button class="btn-export" onclick="exportar('yes')">Exportar Seleccionadas</button>
+<button class="btn-export" onclick="exportar('obs')">Exportar Seleccionadas con Observaciones</button>
+<button class="btn-export" onclick="exportar('no')">Exportar No Seleccionadas</button>
+
+<hr>
+<div id="cards"></div>
+
+<script>
+/* ===============================
+   DATOS Y STORAGE
+================================*/
+const STORAGE_KEY = "che_burlesque_casting_pwa";
+let postulantes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+function guardar() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(postulantes));
+}
+
+/* ===============================
+   LINKS
+================================*/
+function detectarLinks(texto) {
+  return texto ? texto.match(/https?:\/\/[^\s]+/g) || [] : [];
+}
+
+/* ===============================
+   RENDER
+================================*/
+function render() {
+  const c = document.getElementById("cards");
+  c.innerHTML = "";
+
+  postulantes.forEach((p,i)=>{
+    const links=[];
+    Object.values(p.data).forEach(v=>{
+      detectarLinks(String(v)).forEach(l=>links.push(l));
+    });
+
+    const d=document.createElement("div");
+    d.className=`card ${p.status}`;
+    d.innerHTML=`
+      <strong>Postulante ${i+1}</strong><br><br>
+      ${Object.entries(p.data).map(([k,v])=>`
+        <small>${k}</small><br>${v}<br><br>
+      `).join("")}
+
+      ${links.length?`
+      <div class="links"><strong>🎥 Videos</strong>
+        ${links.map(l=>`<a href="${l}" target="_blank">${l}</a>`).join("")}
+      </div><br>`:""}
+
+      <button class="btn-yes" onclick="setStatus(${i},'yes')">Seleccionada</button>
+      <button class="btn-obs" onclick="setStatus(${i},'obs')">Seleccionada con observaciones</button>
+      <button class="btn-no" onclick="setStatus(${i},'no')">No seleccionada</button>
+
+      ${p.status==="obs"?`
+        <textarea placeholder="Observaciones curatoriales"
+          oninput="setObs(${i},this.value)">${p.observations||""}</textarea>
+      `:""}
+
+      <small>${p.evaluatedAt? "Evaluado: "+new Date(p.evaluatedAt).toLocaleString():""}</small>
+    `;
+    c.appendChild(d);
+  });
+}
+
+function setStatus(i,s){
+  postulantes[i].status=s;
+  postulantes[i].evaluatedAt=new Date().toISOString();
+  guardar(); render();
+}
+function setObs(i,v){ postulantes[i].observations=v; guardar(); }
+
+/* ===============================
+   IMPORTAR
+================================*/
+document.getElementById("fileInput").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    postulantes=XLSX.utils.sheet_to_json(sh).map(row=>({
+      data:row,status:"pending",observations:""
+    }));
+    guardar(); render();
+  };
+  r.readAsArrayBuffer(f);
+});
+
+/* ===============================
+   EXPORTAR
+================================*/
+function exportar(status){
+  const data=postulantes.filter(p=>p.status===status).map(p=>({
+    ...p.data,
+    estado:status,
+    observaciones:p.observations||"",
+    fecha:p.evaluatedAt||""
+  }));
+  if(!data.length)return alert("No hay datos");
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,status);
+  XLSX.writeFile(wb,`casting_${status}.xlsx`);
+}
+
+render();
+
+/* ===============================
+   PWA EN UN SOLO ARCHIVO
+================================*/
+
+// MANIFEST
+const manifest = {
+  name: "Evaluador de Casting – Che Burlesque",
+  short_name: "Casting Che",
+  start_url: ".",
+  display: "standalone",
+  background_color: "#0f0f0f",
+  theme_color: "#0f0f0f"
+};
+const manifestBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+const manifestURL = URL.createObjectURL(manifestBlob);
+const link = document.createElement('link');
+link.rel = 'manifest';
+link.href = manifestURL;
+document.head.appendChild(link);
+
+// SERVICE WORKER
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'che-burlesque-pwa-v1';
+    self.addEventListener('install', e=>{
+      e.waitUntil(
+        caches.open(CACHE).then(c=>c.addAll(['./']))
+      );
+      self.skipWaiting();
+    });
+    self.addEventListener('fetch', e=>{
+      e.respondWith(
+        caches.match(e.request).then(r=>r||fetch(e.request))
+      );
+    });
+  `;
+  const swBlob = new Blob([swCode], {type:'text/javascript'});
+  const swURL = URL.createObjectURL(swBlob);
+  navigator.serviceWorker.register(swURL);
+}
+</script>
+
+</body>
+</html>
