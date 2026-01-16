@@ -1,21 +1,11 @@
-const CACHE_NAME = 'che-burlesque-casting-v1';
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll([
-        './',
-        './index.html',
-        './manifest.json'
-      ]);
-    })
-  );
+const CACHE = 'casting-v2';
+const FILES = ['./','./index.html','./manifest.json'];
+
+self.addEventListener('install',e=>{
+  e.waitUntil(caches.open(CACHE).then(c=>c.addAll(FILES)));
 });
 
-self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(resp => {
-      return resp || fetch(e.request);
-    })
-  );
+self.addEventListener('fetch',e=>{
+  e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));
 });
