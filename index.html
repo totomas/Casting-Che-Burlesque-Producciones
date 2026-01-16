@@ -3,278 +3,190 @@
 <head>
   <meta charset="UTF-8">
   <title>Che Burlesque · Casting</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#8b1e3f">
 
-  <!-- SheetJS para XLSX -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
   <style>
-    * { box-sizing: border-box; }
+    * {
+      box-sizing: border-box;
+      font-family: Arial, Helvetica, sans-serif;
+    }
 
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
       background: #0e0e0e;
-      color: #f5f5f5;
+      color: #fff;
     }
 
     header {
-      background: #000;
-      padding: 15px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #333;
-    }
-
-    header h1 {
-      margin: 0;
-      font-size: 18px;
-      letter-spacing: 1px;
-    }
-
-    header button {
-      background: #b00020;
-      color: #fff;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 14px;
+      background: #8b1e3f;
+      padding: 16px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
     }
 
     main {
-      max-width: 1100px;
+      padding: 16px;
+      max-width: 1200px;
       margin: auto;
-      padding: 20px;
     }
 
-    .upload {
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
       margin-bottom: 20px;
     }
 
-    input[type="file"] {
-      margin-top: 10px;
+    button, input[type="file"] {
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
     }
 
-    .cards {
+    button {
+      background: #8b1e3f;
+      color: #fff;
+    }
+
+    button.danger {
+      background: #444;
+    }
+
+    input[type="file"] {
+      background: #222;
+      color: #fff;
+    }
+
+    .grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 15px;
+      gap: 16px;
     }
 
     .card {
       background: #1a1a1a;
-      border-radius: 8px;
-      padding: 15px;
-      border-left: 6px solid #7f8c8d;
+      border-radius: 10px;
+      padding: 14px;
+      border: 1px solid #333;
     }
 
-    .card.yes { border-left-color: #27ae60; }
-    .card.obs { border-left-color: #f1c40f; }
-    .card.no  { border-left-color: #c0392b; }
-
     .card h3 {
-      margin: 0 0 10px;
+      margin-top: 0;
+      color: #f2c4d8;
       font-size: 18px;
     }
 
-    .links a {
-      color: #e6b8ff;
-      display: block;
-      word-break: break-all;
+    .card p {
+      margin: 6px 0;
       font-size: 14px;
-      margin-bottom: 8px;
-      text-decoration: none;
+      line-height: 1.4;
     }
 
-    select, textarea {
-      width: 100%;
-      margin-top: 8px;
-      padding: 8px;
-      border-radius: 4px;
-      border: none;
-      background: #000;
-      color: #fff;
-      font-size: 14px;
-    }
-
-    textarea {
-      resize: vertical;
-      min-height: 60px;
-    }
-
-    .export {
-      margin-top: 30px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .export button {
-      background: #333;
-      color: white;
-      border: 1px solid #555;
-      padding: 10px 15px;
-      cursor: pointer;
-      border-radius: 6px;
+    .label {
+      color: #aaa;
+      font-weight: bold;
     }
   </style>
 </head>
 
 <body>
-
 <header>
-  <h1>Che Burlesque · Casting</h1>
-  <button id="nuevoCastingBtn">🆕 Nuevo casting</button>
+  Che Burlesque Producciones · Casting
 </header>
 
 <main>
-  <div class="upload">
-    <strong>Cargar postulantes (CSV o XLSX)</strong><br>
+  <div class="controls">
     <input type="file" id="fileInput" accept=".csv,.xlsx">
+    <button onclick="nuevoCasting()" class="danger">Nuevo casting</button>
   </div>
 
-  <div class="cards" id="cards"></div>
-
-  <div class="export">
-    <button onclick="exportar('sigue')">Exportar · Siguen</button>
-    <button onclick="exportar('observacion')">Exportar · Siguen con obs</button>
-    <button onclick="exportar('no')">Exportar · No siguen</button>
-  </div>
+  <div id="cards" class="grid"></div>
 </main>
 
 <script>
-  const STORAGE_KEY = 'che_burlesque_casting';
-  let postulantes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+  let postulantes = [];
 
-  const cardsEl = document.getElementById('cards');
-  const fileInput = document.getElementById('fileInput');
-  const nuevoCastingBtn = document.getElementById('nuevoCastingBtn');
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('service-worker.js');
+  }
 
-  render();
+  document.getElementById('fileInput').addEventListener('change', handleFile);
 
-  fileInput.addEventListener('change', handleFile);
-  nuevoCastingBtn.addEventListener('click', nuevoCasting);
+  function nuevoCasting() {
+    if (!confirm('¿Eliminar todos los postulantes y comenzar un nuevo casting?')) return;
+    postulantes = [];
+    document.getElementById('cards').innerHTML = '';
+  }
 
   function handleFile(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    const ext = file.name.split('.').pop().toLowerCase();
+    const reader = new FileReader();
 
-    if (ext === 'csv') {
-      leerCSV(file);
-    } else if (ext === 'xlsx') {
-      leerXLSX(file);
+    if (file.name.endsWith('.csv')) {
+      reader.onload = evt => parseCSV(evt.target.result);
+      reader.readAsText(file);
     } else {
-      alert('Formato no soportado');
+      reader.onload = evt => parseXLSX(evt.target.result);
+      reader.readAsArrayBuffer(file);
     }
-
-    fileInput.value = '';
   }
 
-  function leerCSV(file) {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const lines = reader.result.split('\n').slice(1);
-      procesarFilas(lines.map(l => l.split(',')));
-    };
-    reader.readAsText(file);
-  }
+  function parseCSV(text) {
+    const rows = text.split('\n').map(r => r.split(','));
+    const headers = rows.shift();
 
-  function leerXLSX(file) {
-    const reader = new FileReader();
-    reader.onload = e => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }).slice(1);
-      procesarFilas(rows);
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function procesarFilas(rows) {
-    rows.forEach(cols => {
-      if (!cols[0]) return;
-      postulantes.push({
-        nombre: String(cols[0]).trim(),
-        video: cols.find(c => typeof c === 'string' && c.includes('http')) || '',
-        estado: '',
-        observaciones: ''
-      });
+    rows.forEach(row => {
+      if (row.length < headers.length) return;
+      let obj = {};
+      headers.forEach((h, i) => obj[h.trim()] = row[i]?.trim());
+      postulantes.push(obj);
     });
-    save();
-    render();
+
+    renderCards();
   }
 
-  function render() {
-    cardsEl.innerHTML = '';
-    postulantes.forEach((p, i) => {
+  function parseXLSX(buffer) {
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    postulantes = XLSX.utils.sheet_to_json(sheet);
+    renderCards();
+  }
+
+  function renderCards() {
+    const container = document.getElementById('cards');
+    container.innerHTML = '';
+
+    postulantes.forEach(p => {
       const card = document.createElement('div');
-      card.className = 'card ' + estadoClase(p.estado);
+      card.className = 'card';
 
-      card.innerHTML = `
-        <h3>${p.nombre}</h3>
-        ${p.video ? `<div class="links"><a href="${p.video}" target="_blank">Ver video</a></div>` : ''}
-        <select onchange="setEstado(${i}, this.value)">
-          <option value="">Pendiente</option>
-          <option value="sigue" ${p.estado === 'sigue' ? 'selected' : ''}>Sigue</option>
-          <option value="observacion" ${p.estado === 'observacion' ? 'selected' : ''}>Sigue con observaciones</option>
-          <option value="no" ${p.estado === 'no' ? 'selected' : ''}>No sigue</option>
-        </select>
-        <textarea placeholder="Observaciones..." oninput="setObs(${i}, this.value)">${p.observaciones || ''}</textarea>
-      `;
-      cardsEl.appendChild(card);
+      let html = `<h3>${p.Nombre || p.nombre || 'Postulante'}</h3>`;
+
+      Object.keys(p).forEach(key => {
+        html += `
+          <p>
+            <span class="label">${key}:</span><br>
+            ${p[key] || '-'}
+          </p>
+        `;
+      });
+
+      card.innerHTML = html;
+      container.appendChild(card);
     });
-  }
-
-  function estadoClase(e) {
-    if (e === 'sigue') return 'yes';
-    if (e === 'observacion') return 'obs';
-    if (e === 'no') return 'no';
-    return '';
-  }
-
-  function setEstado(i, v) {
-    postulantes[i].estado = v;
-    save();
-    render();
-  }
-
-  function setObs(i, t) {
-    postulantes[i].observaciones = t;
-    save();
-  }
-
-  function save() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(postulantes));
-  }
-
-  function exportar(tipo) {
-    const data = postulantes.filter(p => p.estado === tipo);
-    if (!data.length) return alert('No hay registros para exportar');
-
-    let csv = 'Nombre,Video,Estado,Observaciones\n';
-    data.forEach(p => {
-      csv += `"${p.nombre}","${p.video}","${p.estado}","${p.observaciones}"\n`;
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `casting-${tipo}.csv`;
-    a.click();
-  }
-
-  function nuevoCasting() {
-    if (!confirm('Esto eliminará todos los postulantes.\n¿Continuar?')) return;
-    postulantes = [];
-    save();
-    render();
   }
 </script>
-
 </body>
 </html>
