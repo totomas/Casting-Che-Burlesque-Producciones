@@ -6,7 +6,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#0f0f0f">
 
-<!-- SheetJS -->
+<link rel="manifest" href="manifest.json">
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <style>
@@ -35,6 +36,142 @@ button {
   background:#1b1b1b;
   padding:15px;
   border-radius:8px;
+  margin-bottom:15px;
+}
+.card.pending { border-left:6px solid #7f8c8d; }
+.card.yes { border-left:6px solid #27ae60; }
+.card.obs { border-left:6px solid #f1c40f; }
+.card.no  { border-left:6px solid #c0392b; }
+
+.links a {
+  color:#1abc9c;
+  display:block;
+  word-break:break-all;
+  font-size:.9em;
+}
+
+textarea {
+  width:100%;
+  margin-top:8px;
+  padding:8px;
+  border-radius:4px;
+  border:none;
+  resize:vertical;
+}
+hr { opacity:.2; }
+</style>
+</head>
+
+<body>
+
+<h1>🎭 Evaluador de Casting</h1>
+<small>Che Burlesque Producciones</small><br>
+
+<input type="file" id="fileInput" accept=".csv,.xlsx"><br>
+
+<button class="btn-export" onclick="exportar('yes')">Exportar Seleccionadas</button>
+<button class="btn-export" onclick="exportar('obs')">Exportar Seleccionadas con Observaciones</button>
+<button class="btn-export" onclick="exportar('no')">Exportar No Seleccionadas</button>
+
+<hr>
+<div id="cards"></div>
+
+<script>
+const STORAGE_KEY = "che_burlesque_casting_pwa";
+let postulantes = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+
+function guardar() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(postulantes));
+}
+
+function detectarLinks(texto) {
+  return texto ? texto.match(/https?:\/\/[^\s]+/g) || [] : [];
+}
+
+function render() {
+  const c = document.getElementById("cards");
+  c.innerHTML = "";
+
+  postulantes.forEach((p,i)=>{
+    const links=[];
+    Object.values(p.data).forEach(v=>{
+      detectarLinks(String(v)).forEach(l=>links.push(l));
+    });
+
+    const d=document.createElement("div");
+    d.className=`card ${p.status}`;
+    d.innerHTML=`
+      <strong>Postulante ${i+1}</strong><br><br>
+
+      ${Object.entries(p.data).map(([k,v])=>`
+        <small>${k}</small><br>${v}<br><br>
+      `).join("")}
+
+      ${links.length?`
+      <div class="links"><strong>🎥 Videos</strong>
+        ${links.map(l=>`<a href="${l}" target="_blank">${l}</a>`).join("")}
+      </div><br>`:""}
+
+      <button class="btn-yes" onclick="setStatus(${i},'yes')">Seleccionada</button>
+      <button class="btn-obs" onclick="setStatus(${i},'obs')">Seleccionada con observaciones</button>
+      <button class="btn-no" onclick="setStatus(${i},'no')">No seleccionada</button>
+
+      ${p.status==="obs"?`
+        <textarea placeholder="Observaciones curatoriales"
+          oninput="setObs(${i},this.value)">${p.observations||""}</textarea>
+      `:""}
+
+      <small>${p.evaluatedAt? "Evaluado: "+new Date(p.evaluatedAt).toLocaleString():""}</small>
+    `;
+    c.appendChild(d);
+  });
+}
+
+function setStatus(i,s){
+  postulantes[i].status=s;
+  postulantes[i].evaluatedAt=new Date().toISOString();
+  guardar(); render();
+}
+function setObs(i,v){ postulantes[i].observations=v; guardar(); }
+
+document.getElementById("fileInput").addEventListener("change",e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const wb=XLSX.read(new Uint8Array(ev.target.result),{type:"array"});
+    const sh=wb.Sheets[wb.SheetNames[0]];
+    postulantes=XLSX.utils.sheet_to_json(sh).map(row=>({
+      data:row,status:"pending",observations:""
+    }));
+    guardar(); render();
+  };
+  r.readAsArrayBuffer(f);
+});
+
+function exportar(status){
+  const data=postulantes.filter(p=>p.status===status).map(p=>({
+    ...p.data,
+    estado:status,
+    observaciones:p.observations||"",
+    fecha:p.evaluatedAt||""
+  }));
+  if(!data.length)return alert("No hay datos");
+  const ws=XLSX.utils.json_to_sheet(data);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,status);
+  XLSX.writeFile(wb,`casting_${status}.xlsx`);
+}
+
+render();
+
+// REGISTRO SERVICE WORKER
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
+
+</body>
+</html>  border-radius:8px;
   margin-bottom:15px;
 }
 .card.pending { border-left:6px solid #7f8c8d; }
