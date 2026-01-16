@@ -1,25 +1,20 @@
 {
-  "name": "Evaluador de Casting – Che Burlesque Producciones",
-  "short_name": "Casting Che",
-  "description": "Herramienta profesional para evaluar castings de Che Burlesque Producciones",
-  "start_url": "./index.html",
-  "scope": "./",
+  "name": "Che Burlesque Casting",
+  "short_name": "Casting CB",
+  "start_url": "index.html",
   "display": "standalone",
-  "background_color": "#0f0f0f",
-  "theme_color": "#0f0f0f",
-  "orientation": "portrait",
+  "background_color": "#0e0e0e",
+  "theme_color": "#8b1e3f",
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }
