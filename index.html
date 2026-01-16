@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -6,10 +5,11 @@
   <title>Che Burlesque · Casting</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
+  <!-- SheetJS para XLSX -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -75,7 +75,7 @@
     .card.no  { border-left-color: #c0392b; }
 
     .card h3 {
-      margin: 0 0 10px 0;
+      margin: 0 0 10px;
       font-size: 18px;
     }
 
@@ -131,8 +131,8 @@
 
 <main>
   <div class="upload">
-    <strong>Cargar postulantes (CSV)</strong><br>
-    <input type="file" id="fileInput" accept=".csv">
+    <strong>Cargar postulantes (CSV o XLSX)</strong><br>
+    <input type="file" id="fileInput" accept=".csv,.xlsx">
   </div>
 
   <div class="cards" id="cards"></div>
@@ -161,71 +161,90 @@
     const file = e.target.files[0];
     if (!file) return;
 
+    const ext = file.name.split('.').pop().toLowerCase();
+
+    if (ext === 'csv') {
+      leerCSV(file);
+    } else if (ext === 'xlsx') {
+      leerXLSX(file);
+    } else {
+      alert('Formato no soportado');
+    }
+
+    fileInput.value = '';
+  }
+
+  function leerCSV(file) {
     const reader = new FileReader();
     reader.onload = () => {
       const lines = reader.result.split('\n').slice(1);
-
-      lines.forEach(line => {
-        const cols = line.split(',');
-        if (!cols[0]) return;
-
-        postulantes.push({
-          nombre: cols[0].trim(),
-          video: cols.find(c => c.includes('http')) || '',
-          estado: '',
-          observaciones: ''
-        });
-      });
-
-      save();
-      render();
-      fileInput.value = '';
+      procesarFilas(lines.map(l => l.split(',')));
     };
-
     reader.readAsText(file);
+  }
+
+  function leerXLSX(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }).slice(1);
+      procesarFilas(rows);
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function procesarFilas(rows) {
+    rows.forEach(cols => {
+      if (!cols[0]) return;
+      postulantes.push({
+        nombre: String(cols[0]).trim(),
+        video: cols.find(c => typeof c === 'string' && c.includes('http')) || '',
+        estado: '',
+        observaciones: ''
+      });
+    });
+    save();
+    render();
   }
 
   function render() {
     cardsEl.innerHTML = '';
-
-    postulantes.forEach((p, index) => {
+    postulantes.forEach((p, i) => {
       const card = document.createElement('div');
       card.className = 'card ' + estadoClase(p.estado);
 
       card.innerHTML = `
         <h3>${p.nombre}</h3>
-
         ${p.video ? `<div class="links"><a href="${p.video}" target="_blank">Ver video</a></div>` : ''}
-
-        <select onchange="setEstado(${index}, this.value)">
+        <select onchange="setEstado(${i}, this.value)">
           <option value="">Pendiente</option>
           <option value="sigue" ${p.estado === 'sigue' ? 'selected' : ''}>Sigue</option>
           <option value="observacion" ${p.estado === 'observacion' ? 'selected' : ''}>Sigue con observaciones</option>
           <option value="no" ${p.estado === 'no' ? 'selected' : ''}>No sigue</option>
         </select>
-
-        <textarea placeholder="Observaciones..." oninput="setObs(${index}, this.value)">${p.observaciones || ''}</textarea>
+        <textarea placeholder="Observaciones..." oninput="setObs(${i}, this.value)">${p.observaciones || ''}</textarea>
       `;
-
       cardsEl.appendChild(card);
     });
   }
 
-  function estadoClase(estado) {
-    if (estado === 'sigue') return 'yes';
-    if (estado === 'observacion') return 'obs';
-    if (estado === 'no') return 'no';
+  function estadoClase(e) {
+    if (e === 'sigue') return 'yes';
+    if (e === 'observacion') return 'obs';
+    if (e === 'no') return 'no';
     return '';
   }
 
-  function setEstado(index, estado) {
-    postulantes[index].estado = estado;
+  function setEstado(i, v) {
+    postulantes[i].estado = v;
     save();
     render();
   }
 
-  function setObs(index, texto) {
-    postulantes[index].observaciones = texto;
+  function setObs(i, t) {
+    postulantes[i].observaciones = t;
     save();
   }
 
@@ -250,11 +269,7 @@
   }
 
   function nuevoCasting() {
-    const ok = confirm(
-      '¿Seguro que deseas iniciar un NUEVO CASTING?\n\nEsto eliminará todos los postulantes.'
-    );
-    if (!ok) return;
-
+    if (!confirm('Esto eliminará todos los postulantes.\n¿Continuar?')) return;
     postulantes = [];
     save();
     render();
