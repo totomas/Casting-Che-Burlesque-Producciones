@@ -2,216 +2,142 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Che Burlesque · Casting</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="theme-color" content="#8b1e3f">
-
-<link rel="manifest" href="manifest.json">
+<title>Teleprompter</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
-
 <style>
-* { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
-body { margin: 0; background: #0f0f0f; color: #fff; }
-header { background: #8b1e3f; padding: 14px; text-align: center; font-size: 20px; font-weight: bold; }
-main { display: flex; height: calc(100vh - 58px); }
-aside { width: 320px; background: #161616; border-right: 1px solid #333; overflow-y: auto; }
-section { flex: 1; padding: 16px; overflow-y: auto; }
-.controls { padding: 10px; border-bottom: 1px solid #333; }
-
-button, input[type="file"] {
-  width: 100%; margin-bottom: 8px; padding: 10px;
-  border: none; border-radius: 6px; font-weight: bold;
+body {
+  background: black;
+  color: white;
+  font-family: Arial, sans-serif;
 }
-button { background: #8b1e3f; color: #fff; cursor: pointer; }
-button.secondary { background: #444; }
-button.export { background: #2e7d32; }
-
-.list-item { padding: 10px; border-bottom: 1px solid #333; cursor: pointer; }
-.list-item:hover { background: #222; }
-.list-item.active { background: #8b1e3f; }
-
-.label { color: #aaa; font-weight: bold; font-size: 13px; }
-p { font-size: 14px; }
-
-select, textarea {
-  width: 100%; padding: 6px; margin-bottom: 10px;
-  background: #222; color: #fff;
-  border: 1px solid #444; border-radius: 4px;
+#panel {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 260px;
+  background: #111;
+  height: 100%;
+  padding: 10px;
+  overflow-y: auto;
 }
-
-.video a { color: #8ecdfc; word-break: break-all; }
+.name {
+  font-weight: bold;
+  margin: 6px 0;
+}
+#prompter {
+  margin-left: 280px;
+  font-size: 32px;
+  line-height: 1.6;
+}
 </style>
 </head>
 
 <body>
-<header>Che Burlesque Producciones · Casting</header>
 
-<main>
-<aside>
-  <div class="controls">
-    <input type="file" id="fileInput" accept=".csv,.xlsx">
-    <button class="secondary" onclick="nuevoCasting()">Nuevo Casting</button>
-    <button class="export" onclick="exportar('Sigue')">Exportar SIGUE</button>
-    <button class="export" onclick="exportar('Sigue con observaciones')">Exportar OBS</button>
-    <button class="export" onclick="exportar('No sigue')">Exportar NO</button>
-  </div>
-  <div id="lista"></div>
-</aside>
+<div id="panel">
+  <input type="file" id="fileInput"><br><br>
+  <label>Velocidad:</label>
+  <input type="number" id="speed" value="1"><br><br>
+  <label>Tamaño texto:</label>
+  <input type="number" id="fontSize" value="32">
+  <div id="names"></div>
+</div>
 
-<section id="detalle">
-  <h2>Selecciona un postulante</h2>
-</section>
-</main>
+<div id="prompter"></div>
 
 <script>
-let postulantes = JSON.parse(localStorage.getItem('castingPostulantes')) || [];
-let seleccionado = null;
+let participants = JSON.parse(localStorage.getItem("participants")) || [];
+let textContent = localStorage.getItem("textContent") || "";
 
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('service-worker.js');
+const prompter = document.getElementById("prompter");
+const namesDiv = document.getElementById("names");
+const speedInput = document.getElementById("speed");
+const fontSizeInput = document.getElementById("fontSize");
+
+prompter.innerText = textContent;
+prompter.style.fontSize = fontSizeInput.value + "px";
+
+/* ------------------ VALIDACIÓN DE NOMBRE ------------------ */
+function isValidName(value) {
+  if (!value) return false;
+  const v = value.toString().trim();
+  if (v.length < 2 || v.length > 40) return false;
+  if (/http|www|\.com|@|\//i.test(v)) return false;
+  return true;
 }
 
-document.getElementById('fileInput').addEventListener('change', handleFile);
-
-function guardar() {
-  localStorage.setItem('castingPostulantes', JSON.stringify(postulantes));
-}
-
-function nuevoCasting() {
-  if (!confirm('¿Eliminar todo el casting actual?')) return;
-  postulantes = [];
-  seleccionado = null;
-  guardar();
-  renderLista();
-  document.getElementById('detalle').innerHTML = '<h2>Casting reiniciado</h2>';
-}
-
-function handleFile(e) {
+/* ------------------ IMPORTAR XLSX ------------------ */
+document.getElementById("fileInput").addEventListener("change", e => {
   const file = e.target.files[0];
-  if (!file) return;
-
   const reader = new FileReader();
-  if (file.name.endsWith('.csv')) {
-    reader.onload = ev => parseCSV(ev.target.result);
-    reader.readAsText(file);
-  } else {
-    reader.onload = ev => parseXLSX(ev.target.result);
-    reader.readAsArrayBuffer(file);
-  }
-}
 
-function parseCSV(text) {
-  const rows = text.split('\n').filter(r => r.trim());
-  const headers = rows.shift().split(',');
+  reader.onload = evt => {
+    const workbook = XLSX.read(evt.target.result, { type: "binary" });
+    const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
 
-  postulantes = rows.map(r => {
-    const values = r.split(',');
-    let o = { estado: 'Pendiente', observaciones: '' };
-    headers.forEach((h, i) => o[h.trim()] = values[i]?.trim());
-    return o;
-  });
+    participants = sheet.map(row => {
+      const artistic =
+        row["nombre artístico"] ||
+        row["nombre_artistico"] ||
+        row["artistico"];
 
-  guardar();
-  renderLista();
-}
+      const real =
+        row["nombre real"] ||
+        row["nombre"];
 
-function parseXLSX(buf) {
-  const wb = XLSX.read(buf, { type: 'array' });
-  const sh = wb.Sheets[wb.SheetNames[0]];
-  postulantes = XLSX.utils.sheet_to_json(sh).map(p => ({
-    ...p,
-    estado: 'Pendiente',
-    observaciones: ''
-  }));
-  guardar();
-  renderLista();
-}
+      let finalName = "Sin nombre";
 
-function obtenerNombre(p) {
-  const keys = Object.keys(p);
+      if (isValidName(artistic)) finalName = artistic;
+      else if (isValidName(real)) finalName = real;
 
-  const artistico = keys.find(k => k.toLowerCase().includes('art'));
-  if (artistico && p[artistico]) return p[artistico];
+      return { name: finalName };
+    });
 
-  const nombre = keys.find(k => k.toLowerCase().includes('nombre'));
-  if (nombre && p[nombre]) return p[nombre];
+    saveData();
+    renderNames();
+  };
 
-  return 'Postulante';
-}
+  reader.readAsBinaryString(file);
+});
 
-function renderLista() {
-  const l = document.getElementById('lista');
-  l.innerHTML = '';
-
-  postulantes.forEach((p, i) => {
-    const d = document.createElement('div');
-    d.className = 'list-item' + (i === seleccionado ? ' active' : '');
-    d.innerHTML = `<strong>${i + 1} · ${obtenerNombre(p)}</strong><br>
-                   <small>${p.estado}</small>`;
-    d.onclick = () => seleccionar(i);
-    l.appendChild(d);
+/* ------------------ RENDER NOMBRES ------------------ */
+function renderNames() {
+  namesDiv.innerHTML = "";
+  participants.forEach(p => {
+    const div = document.createElement("div");
+    div.className = "name";
+    div.textContent = p.name;
+    namesDiv.appendChild(div);
   });
 }
 
-function seleccionar(i) {
-  seleccionado = i;
-  renderLista();
-  renderDetalle();
+/* ------------------ GUARDADO ------------------ */
+function saveData() {
+  localStorage.setItem("participants", JSON.stringify(participants));
+  localStorage.setItem("textContent", prompter.innerText);
+  localStorage.setItem("speed", speedInput.value);
+  localStorage.setItem("fontSize", fontSizeInput.value);
 }
 
-function renderDetalle() {
-  if (seleccionado === null) return;
+/* ------------------ CONTROLES ------------------ */
+speedInput.value = localStorage.getItem("speed") || 1;
+fontSizeInput.value = localStorage.getItem("fontSize") || 32;
 
-  const p = postulantes[seleccionado];
-  let html = `<h3>${obtenerNombre(p)}</h3>`;
+fontSizeInput.addEventListener("input", () => {
+  prompter.style.fontSize = fontSizeInput.value + "px";
+  saveData();
+});
 
-  Object.keys(p).forEach(k => {
-    if (['estado', 'observaciones'].includes(k)) return;
-    if (typeof p[k] === 'string' && p[k].startsWith('http')) {
-      html += `<p class="video"><span class="label">${k}</span><br>
-      <a href="${p[k]}" target="_blank">Ver video</a></p>`;
-    } else {
-      html += `<p><span class="label">${k}</span><br>${p[k] || '-'}</p>`;
-    }
-  });
+/* ------------------ SCROLL ------------------ */
+let scrollPos = 0;
+setInterval(() => {
+  scrollPos += parseFloat(speedInput.value);
+  window.scrollTo(0, scrollPos);
+}, 50);
 
-  html += `
-    <span class="label">Estado</span>
-    <select onchange="setEstado(this.value)">
-      <option ${p.estado === 'Pendiente' ? 'selected' : ''}>Pendiente</option>
-      <option ${p.estado === 'Sigue' ? 'selected' : ''}>Sigue</option>
-      <option ${p.estado === 'Sigue con observaciones' ? 'selected' : ''}>Sigue con observaciones</option>
-      <option ${p.estado === 'No sigue' ? 'selected' : ''}>No sigue</option>
-    </select>
-
-    <span class="label">Observaciones</span>
-    <textarea rows="4" oninput="setObs(this.value)">${p.observaciones}</textarea>
-  `;
-
-  document.getElementById('detalle').innerHTML = html;
-}
-
-function setEstado(v) {
-  postulantes[seleccionado].estado = v;
-  guardar();
-  renderLista();
-}
-
-function setObs(v) {
-  postulantes[seleccionado].observaciones = v;
-  guardar();
-}
-
-function exportar(tipo) {
-  const f = postulantes.filter(p => p.estado === tipo);
-  if (!f.length) { alert('No hay datos'); return; }
-  const ws = XLSX.utils.json_to_sheet(f);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, tipo);
-  XLSX.writeFile(wb, `Casting_${tipo}.xlsx`);
-}
-
-renderLista();
+/* ------------------ INIT ------------------ */
+renderNames();
 </script>
+
 </body>
 </html>
