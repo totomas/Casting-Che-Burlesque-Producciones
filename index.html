@@ -2,136 +2,117 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8" />
-<title>Casting Che Burlesque – v3</title>
+<title>Casting Che Burlesque – v3.1</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 
 <style>
 :root {
-  --bg: #0e0e0e;
-  --panel: #151515;
-  --card: #1e1e1e;
-  --accent: #d81b60;
-  --text: #f5f5f5;
-  --muted: #aaa;
+  --bg:#0e0e0e;
+  --panel:#151515;
+  --card:#1e1e1e;
+  --text:#f5f5f5;
+  --muted:#aaa;
+  --green:#2e7d32;
+  --yellow:#f9a825;
+  --red:#c62828;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing:border-box; }
 
 body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: system-ui, sans-serif;
-  display: flex;
-  height: 100vh;
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:system-ui,sans-serif;
+  display:flex;
+  height:100vh;
 }
 
-/* PANEL IZQUIERDO */
+/* LISTA */
 #list {
-  width: 320px;
-  background: var(--panel);
-  padding: 12px;
-  overflow-y: auto;
+  width:320px;
+  background:var(--panel);
+  padding:12px;
+  overflow-y:auto;
 }
 
 #list header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
 }
 
 #list button {
-  background: var(--accent);
-  border: none;
-  color: white;
-  padding: 8px;
-  border-radius: 6px;
-  cursor: pointer;
+  border:none;
+  border-radius:6px;
+  padding:8px;
+  cursor:pointer;
 }
 
 #list ul {
-  list-style: none;
-  padding: 0;
-  margin: 12px 0 0;
+  list-style:none;
+  padding:0;
+  margin-top:12px;
 }
 
 #list li {
-  padding: 10px;
-  border-bottom: 1px solid #222;
-  cursor: pointer;
+  padding:10px;
+  border-bottom:1px solid #222;
+  cursor:pointer;
 }
 
-#list li.active {
-  background: #222;
-}
+#list li.active { background:#222; }
+
+.pendiente { color:#ccc; }
+.pasa { color:var(--green); }
+.observacion { color:var(--yellow); }
+.no_pasa { color:var(--red); }
 
 /* FICHA */
 #detail {
-  flex: 1;
-  padding: 20px;
-  overflow-y: auto;
+  flex:1;
+  padding:20px;
+  overflow-y:auto;
 }
 
 .card {
-  background: var(--card);
-  border-radius: 10px;
-  padding: 20px;
-  max-width: 900px;
-}
-
-h2 {
-  margin-top: 0;
+  background:var(--card);
+  border-radius:10px;
+  padding:20px;
+  max-width:900px;
 }
 
 .label {
-  font-size: 13px;
-  color: var(--muted);
+  font-size:13px;
+  color:var(--muted);
+  margin-top:12px;
 }
 
 input, textarea, select {
-  width: 100%;
-  padding: 8px;
-  border-radius: 6px;
-  border: none;
-  margin-bottom: 12px;
+  width:100%;
+  padding:8px;
+  border-radius:6px;
+  border:none;
 }
 
-textarea { min-height: 80px; }
-
-.actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.actions button {
-  flex: 1;
-  padding: 10px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
-}
-
-.pass { background: #2e7d32; color: white; }
-.obs { background: #f9a825; color: black; }
-.fail { background: #c62828; color: white; }
+textarea { min-height:80px; }
 
 .export {
-  margin-top: 20px;
-  display: flex;
-  gap: 10px;
+  margin-top:20px;
+  display:flex;
+  gap:10px;
 }
 </style>
 </head>
 
 <body>
 
-<!-- LISTA -->
+<!-- PANEL -->
 <aside id="list">
   <header>
-    <input type="file" id="fileInput" accept=".csv,.xlsx" />
+    <input type="file" id="fileInput" accept=".csv,.xlsx">
     <button onclick="newCasting()">Nuevo casting</button>
   </header>
   <ul id="names"></ul>
@@ -157,169 +138,155 @@ textarea { min-height: 80px; }
     <div class="label">Observaciones</div>
     <textarea id="notes"></textarea>
 
+    <div class="label">Información completa</div>
+    <div id="info"></div>
+
     <div class="label">Videos</div>
     <div id="videos"></div>
 
     <div class="export">
-      <button onclick="exportCSV('pasa')">Exportar quienes siguen</button>
-      <button onclick="exportCSV('no_pasa')">Exportar quienes no siguen</button>
+      <button onclick="exportCSV('pasa')">Exportar siguen</button>
+      <button onclick="exportCSV('observacion')">Exportar observaciones</button>
+      <button onclick="exportCSV('no_pasa')">Exportar no siguen</button>
     </div>
   </div>
 </main>
 
 <script>
-const STORAGE_KEY = "che_casting_v3";
-let data = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-let selected = null;
+const KEY="che_casting_v31";
+let data=JSON.parse(localStorage.getItem(KEY))||[];
+let selected=null;
 
-/* UTILIDADES */
-function cleanName(v) {
-  if (!v) return null;
-  v = v.toString().trim();
-  if (v.length < 2 || v.length > 40) return null;
-  if (/http|www|@|\//i.test(v)) return null;
+const cleanName=v=>{
+  if(!v)return null;
+  v=v.toString().trim();
+  if(v.length<2||v.length>40)return null;
+  if(/http|www|@|\//i.test(v))return null;
   return v;
-}
+};
 
-function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
+const save=()=>localStorage.setItem(KEY,JSON.stringify(data));
 
 /* IMPORTAR */
-document.getElementById("fileInput").addEventListener("change", e => {
-  const file = e.target.files[0];
-  const reader = new FileReader();
-
-  reader.onload = evt => {
-    let rows = [];
-    if (file.name.endsWith(".csv")) {
-      const text = evt.target.result;
-      const [head, ...lines] = text.split("\n");
-      const headers = head.split(",");
-      rows = lines.map(l => {
-        const obj = {};
-        l.split(",").forEach((v,i)=>obj[headers[i]] = v);
-        return obj;
+fileInput.onchange=e=>{
+  const f=e.target.files[0];
+  const r=new FileReader();
+  r.onload=ev=>{
+    let rows=[];
+    if(f.name.endsWith(".csv")){
+      const [h,...l]=ev.target.result.split("\n");
+      const heads=h.split(",");
+      rows=l.map(x=>{
+        const o={};
+        x.split(",").forEach((v,i)=>o[heads[i]]=v);
+        return o;
       });
     } else {
-      const wb = XLSX.read(evt.target.result, {type:"binary"});
-      rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      const wb=XLSX.read(ev.target.result,{type:"binary"});
+      rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
     }
 
-    data = rows.map((r,i)=>{
-      const name =
-        cleanName(r["Nombre artístico"]) ||
-        cleanName(r["Nombre Artistico"]) ||
-        cleanName(r["Nombre real"]) ||
-        cleanName(r["Nombre"]) ||
+    data=rows.map((r,i)=>{
+      const name=
+        cleanName(r["Nombre artístico"])||
+        cleanName(r["Nombre Artistico"])||
+        cleanName(r["Nombre real"])||
+        cleanName(r["Nombre"])||
         `Postulante ${i+1}`;
 
-      const videos = Object.values(r).filter(v =>
-        typeof v === "string" && v.includes("http")
-      );
+      const videos=Object.values(r).filter(v=>typeof v==="string"&&v.includes("http"));
 
       return {
-        id: crypto.randomUUID(),
+        id:crypto.randomUUID(),
         name,
-        raw: r,
+        raw:r,
         videos,
-        status: "pendiente",
-        notes: ""
+        status:"pendiente",
+        notes:""
       };
     });
-
-    save();
-    renderList();
+    save(); renderList();
   };
+  f.name.endsWith(".csv")?r.readAsText(f):r.readAsBinaryString(f);
+};
 
-  file.name.endsWith(".csv")
-    ? reader.readAsText(file)
-    : reader.readAsBinaryString(file);
-});
-
-/* RENDER LISTA */
-function renderList() {
-  const ul = document.getElementById("names");
-  ul.innerHTML = "";
+/* LISTA */
+function renderList(){
+  names.innerHTML="";
   data.forEach((p,i)=>{
-    const li = document.createElement("li");
-    li.textContent = `${i+1}. ${p.name}`;
-    li.onclick = ()=>select(p.id);
-    if (selected === p.id) li.classList.add("active");
-    ul.appendChild(li);
+    const li=document.createElement("li");
+    li.textContent=`${i+1}. ${p.name}`;
+    li.className=p.status+(selected===p.id?" active":"");
+    li.onclick=()=>select(p.id);
+    names.appendChild(li);
   });
 }
 
-/* SELECCIONAR */
-function select(id) {
-  selected = id;
-  const p = data.find(x=>x.id===id);
-  document.getElementById("empty").style.display="none";
-  document.getElementById("card").style.display="block";
-  document.getElementById("name").textContent = p.name;
-  document.getElementById("status").value = p.status;
-  document.getElementById("notes").value = p.notes;
+/* FICHA */
+function select(id){
+  selected=id;
+  const p=data.find(x=>x.id===id);
+  empty.style.display="none";
+  card.style.display="block";
+  name.textContent=p.name;
+  status.value=p.status;
+  notes.value=p.notes;
 
-  const vids = document.getElementById("videos");
-  vids.innerHTML = "";
+  info.innerHTML="";
+  Object.entries(p.raw).forEach(([k,v])=>{
+    const d=document.createElement("div");
+    d.innerHTML=`<strong>${k}:</strong> ${v}`;
+    info.appendChild(d);
+  });
+
+  videos.innerHTML="";
   p.videos.forEach(v=>{
-    const a = document.createElement("a");
-    a.href = v;
-    a.target = "_blank";
-    a.textContent = v;
+    const a=document.createElement("a");
+    a.href=v;a.target="_blank";a.textContent=v;
     a.style.display="block";
-    vids.appendChild(a);
+    videos.appendChild(a);
   });
 
   renderList();
 }
 
-/* GUARDAR CAMBIOS */
-document.getElementById("status").onchange = e => {
-  const p = data.find(x=>x.id===selected);
-  p.status = e.target.value;
-  save();
+/* CAMBIOS */
+status.onchange=e=>{
+  data.find(x=>x.id===selected).status=e.target.value;
+  save(); renderList();
 };
-
-document.getElementById("notes").oninput = e => {
-  const p = data.find(x=>x.id===selected);
-  p.notes = e.target.value;
+notes.oninput=e=>{
+  data.find(x=>x.id===selected).notes=e.target.value;
   save();
 };
 
 /* EXPORTAR */
-function exportCSV(status) {
-  const rows = data.filter(p=>p.status===status);
-  if (!rows.length) return alert("No hay datos");
-
-  const headers = ["Nombre","Estado","Observaciones","Videos"];
-  const csv = [
-    headers.join(","),
+function exportCSV(st){
+  const rows=data.filter(p=>p.status===st);
+  if(!rows.length)return alert("No hay datos");
+  const csv=[
+    "Nombre,Estado,Observaciones,Videos",
     ...rows.map(p=>[
-      p.name,
-      p.status,
+      p.name,p.status,
       `"${p.notes}"`,
       `"${p.videos.join(" | ")}"`
     ].join(","))
   ].join("\n");
 
-  const blob = new Blob([csv],{type:"text/csv"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = status + "_casting.csv";
+  const b=new Blob([csv],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(b);
+  a.download=`${st}_casting.csv`;
   a.click();
 }
 
-/* NUEVO CASTING */
-function newCasting() {
-  if (!confirm("Esto eliminará todos los postulantes")) return;
-  data = [];
-  selected = null;
-  save();
-  location.reload();
+/* NUEVO */
+function newCasting(){
+  if(confirm("Eliminar casting actual?")){
+    data=[];selected=null;save();location.reload();
+  }
 }
 
-/* INIT */
 renderList();
 </script>
 
