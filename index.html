@@ -2,32 +2,44 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Teleprompter</title>
+<title>Teleprompter Pro v3</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
 <style>
 body {
+  margin: 0;
   background: black;
   color: white;
   font-family: Arial, sans-serif;
 }
+
 #panel {
   position: fixed;
   left: 0;
   top: 0;
-  width: 260px;
-  background: #111;
+  width: 270px;
   height: 100%;
-  padding: 10px;
+  background: #111;
+  padding: 12px;
   overflow-y: auto;
 }
+
+#panel label {
+  font-size: 13px;
+  opacity: 0.8;
+}
+
 .name {
   font-weight: bold;
   margin: 6px 0;
 }
+
 #prompter {
-  margin-left: 280px;
+  margin-left: 290px;
+  padding: 40px;
   font-size: 32px;
   line-height: 1.6;
+  white-space: pre-wrap;
 }
 </style>
 </head>
@@ -36,46 +48,68 @@ body {
 
 <div id="panel">
   <input type="file" id="fileInput"><br><br>
-  <label>Velocidad:</label>
-  <input type="number" id="speed" value="1"><br><br>
-  <label>Tamaño texto:</label>
-  <input type="number" id="fontSize" value="32">
+
+  <label>Velocidad</label><br>
+  <input type="number" id="speed" step="0.1"><br><br>
+
+  <label>Tamaño texto</label><br>
+  <input type="number" id="fontSize"><br><br>
+
+  <label>Texto</label><br>
+  <textarea id="textInput" rows="6" style="width:100%"></textarea>
+
+  <hr>
   <div id="names"></div>
 </div>
 
 <div id="prompter"></div>
 
 <script>
-let participants = JSON.parse(localStorage.getItem("participants")) || [];
-let textContent = localStorage.getItem("textContent") || "";
+/* ---------- ESTADO ---------- */
+let participants = JSON.parse(localStorage.getItem("participants_v3")) || [];
+let scrollY = parseFloat(localStorage.getItem("scrollY")) || 0;
 
+/* ---------- ELEMENTOS ---------- */
 const prompter = document.getElementById("prompter");
 const namesDiv = document.getElementById("names");
 const speedInput = document.getElementById("speed");
 const fontSizeInput = document.getElementById("fontSize");
+const textInput = document.getElementById("textInput");
 
-prompter.innerText = textContent;
+/* ---------- CONFIG ---------- */
+speedInput.value = localStorage.getItem("speed_v3") || 1;
+fontSizeInput.value = localStorage.getItem("fontSize_v3") || 32;
+textInput.value = localStorage.getItem("text_v3") || "";
+
+prompter.innerText = textInput.value;
 prompter.style.fontSize = fontSizeInput.value + "px";
+window.scrollTo(0, scrollY);
 
-/* ------------------ VALIDACIÓN DE NOMBRE ------------------ */
+/* ---------- UTILIDADES ---------- */
 function isValidName(value) {
   if (!value) return false;
   const v = value.toString().trim();
   if (v.length < 2 || v.length > 40) return false;
-  if (/http|www|\.com|@|\//i.test(v)) return false;
+  if (/http|www|\.com|@|\/|\\|\n/i.test(v)) return false;
   return true;
 }
 
-/* ------------------ IMPORTAR XLSX ------------------ */
+const colors = ["#ff6b6b","#feca57","#48dbfb","#1dd1a1","#c8d6e5","#f368e0"];
+let colorIndex = 0;
+
+function getColor() {
+  colorIndex = (colorIndex + 1) % colors.length;
+  return colors[colorIndex];
+}
+
+/* ---------- XLSX ---------- */
 document.getElementById("fileInput").addEventListener("change", e => {
-  const file = e.target.files[0];
   const reader = new FileReader();
-
   reader.onload = evt => {
-    const workbook = XLSX.read(evt.target.result, { type: "binary" });
-    const sheet = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+    const wb = XLSX.read(evt.target.result, { type: "binary" });
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
 
-    participants = sheet.map(row => {
+    participants = rows.map(row => {
       const artistic =
         row["nombre artístico"] ||
         row["nombre_artistico"] ||
@@ -85,57 +119,64 @@ document.getElementById("fileInput").addEventListener("change", e => {
         row["nombre real"] ||
         row["nombre"];
 
-      let finalName = "Sin nombre";
+      let name = "Sin nombre";
+      if (isValidName(artistic)) name = artistic;
+      else if (isValidName(real)) name = real;
 
-      if (isValidName(artistic)) finalName = artistic;
-      else if (isValidName(real)) finalName = real;
-
-      return { name: finalName };
+      return {
+        name,
+        color: getColor()
+      };
     });
 
-    saveData();
+    save();
     renderNames();
   };
-
-  reader.readAsBinaryString(file);
+  reader.readAsBinaryString(e.target.files[0]);
 });
 
-/* ------------------ RENDER NOMBRES ------------------ */
+/* ---------- RENDER ---------- */
 function renderNames() {
   namesDiv.innerHTML = "";
   participants.forEach(p => {
-    const div = document.createElement("div");
-    div.className = "name";
-    div.textContent = p.name;
-    namesDiv.appendChild(div);
+    const d = document.createElement("div");
+    d.className = "name";
+    d.style.color = p.color;
+    d.textContent = p.name;
+    namesDiv.appendChild(d);
   });
 }
 
-/* ------------------ GUARDADO ------------------ */
-function saveData() {
-  localStorage.setItem("participants", JSON.stringify(participants));
-  localStorage.setItem("textContent", prompter.innerText);
-  localStorage.setItem("speed", speedInput.value);
-  localStorage.setItem("fontSize", fontSizeInput.value);
+/* ---------- GUARDADO ---------- */
+function save() {
+  localStorage.setItem("participants_v3", JSON.stringify(participants));
+  localStorage.setItem("speed_v3", speedInput.value);
+  localStorage.setItem("fontSize_v3", fontSizeInput.value);
+  localStorage.setItem("text_v3", textInput.value);
+  localStorage.setItem("scrollY", window.scrollY);
 }
 
-/* ------------------ CONTROLES ------------------ */
-speedInput.value = localStorage.getItem("speed") || 1;
-fontSizeInput.value = localStorage.getItem("fontSize") || 32;
-
-fontSizeInput.addEventListener("input", () => {
+/* ---------- EVENTOS ---------- */
+fontSizeInput.oninput = () => {
   prompter.style.fontSize = fontSizeInput.value + "px";
-  saveData();
+  save();
+};
+
+textInput.oninput = () => {
+  prompter.innerText = textInput.value;
+  save();
+};
+
+window.addEventListener("scroll", () => {
+  localStorage.setItem("scrollY", window.scrollY);
 });
 
-/* ------------------ SCROLL ------------------ */
-let scrollPos = 0;
+/* ---------- SCROLL AUTO ---------- */
 setInterval(() => {
-  scrollPos += parseFloat(speedInput.value);
-  window.scrollTo(0, scrollPos);
+  window.scrollBy(0, parseFloat(speedInput.value));
 }, 50);
 
-/* ------------------ INIT ------------------ */
+/* ---------- INIT ---------- */
 renderNames();
 </script>
 
